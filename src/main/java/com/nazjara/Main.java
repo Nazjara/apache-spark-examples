@@ -15,6 +15,7 @@ public class Main {
         try (var sparkContext = new JavaSparkContext(sparkConfig))
         {
             var rdd = sparkContext.parallelize(List.of(11.1, 12.1, 13.1, 14.1));
+            System.out.println(rdd.reduce(Double::sum));
         }
     }
 }
