@@ -5,7 +5,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -45,6 +48,18 @@ public class Main {
                     .groupByKey()
                     .collect()
                     .forEach(tuple -> System.out.println(tuple._1() + ":" + Iterables.size(tuple._2())));
+
+            //flatMap + filter
+            sparkContext.parallelize(
+                    List.of("WARN: log message 1",
+                            "ERROR: log message 2",
+                            "FATAL: log message 3",
+                            "ERROR: log message 4",
+                            "WARN: log message 5"))
+                    .flatMap(value -> Arrays.asList(value.split(" ")).iterator())
+                    .filter(value -> value.length() > 1)
+                    .collect()
+                    .forEach(System.out::println);
 
         }
     }
