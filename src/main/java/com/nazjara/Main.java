@@ -50,14 +50,9 @@ public class Main {
                     .forEach(tuple -> System.out.println(tuple._1() + ":" + Iterables.size(tuple._2())));
 
             //flatMap + filter
-            sparkContext.parallelize(
-                    List.of("WARN: log message 1",
-                            "ERROR: log message 2",
-                            "FATAL: log message 3",
-                            "ERROR: log message 4",
-                            "WARN: log message 5"))
+            sparkContext.textFile("src/main/resources/subtitles/input.txt")
                     .flatMap(value -> Arrays.asList(value.split(" ")).iterator())
-                    .filter(value -> value.length() > 1)
+//                    .filter(value -> value.length() > 1)
                     .collect()
                     .forEach(System.out::println);
 
