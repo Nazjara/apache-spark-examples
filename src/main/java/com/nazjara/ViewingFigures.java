@@ -1,4 +1,4 @@
-package com.virtualpairprogrammers;
+package com.nazjara;
 
 import java.util.ArrayList;
 import java.util.List;

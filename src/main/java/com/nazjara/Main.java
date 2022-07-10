@@ -6,9 +6,7 @@ import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class Main {
 
@@ -35,7 +33,7 @@ public class Main {
                     .mapToPair(value -> new Tuple2<>(value.split(":")[0], 1L))
                     .reduceByKey(Long::sum)
                     .collect()
-                    .forEach(tuple -> System.out.println(tuple._1() + ":" + tuple._2()));
+                    .forEach(tuple -> System.out.println(tuple._1() + " : " + tuple._2()));
 
             //groupByKey (performance issues)
             sparkContext.parallelize(
@@ -47,15 +45,18 @@ public class Main {
                     .mapToPair(value -> new Tuple2<>(value.split(":")[0], 1L))
                     .groupByKey()
                     .collect()
-                    .forEach(tuple -> System.out.println(tuple._1() + ":" + Iterables.size(tuple._2())));
+                    .forEach(tuple -> System.out.println(tuple._1() + " : " + Iterables.size(tuple._2())));
 
-            //flatMap + filter
-            sparkContext.textFile("src/main/resources/subtitles/input.txt")
+            // count most used not boring words
+            sparkContext.textFile("src/main/resources/subtitles/input-spring.txt")
                     .flatMap(value -> Arrays.asList(value.split(" ")).iterator())
-//                    .filter(value -> value.length() > 1)
-                    .collect()
+                    .mapToPair(value -> new Tuple2<>(value.toLowerCase().replaceAll("[^a-zA-Z]", ""), 1L))
+                    .filter(value -> !value._1().isBlank() && Util.isNotBoring(value._1()))
+                    .reduceByKey(Long::sum)
+                    .mapToPair(Tuple2::swap)
+                    .sortByKey(false)
+                    .take(10)
                     .forEach(System.out::println);
-
         }
     }
 }
