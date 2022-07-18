@@ -10,7 +10,7 @@ import scala.Tuple3;
 import java.util.Arrays;
 import java.util.List;
 
-public class Main {
+public class SparkRddExamples {
 
     public static void main(String[] args) {
         var sparkConfig = new SparkConf()
@@ -57,6 +57,8 @@ public class Main {
                     .reduceByKey(Long::sum)
                     .mapToPair(Tuple2::swap)
                     .sortByKey(false)
+//                    .cache()
+//                    .persist(StorageLevel.MEMORY_AND_DISK())
                     .take(10)
                     .forEach(System.out::println);
 
@@ -64,8 +66,7 @@ public class Main {
         }
     }
 
-    private static void countCourseScores(JavaSparkContext sparkContext)
-    {
+    private static void countCourseScores(JavaSparkContext sparkContext) {
         var userChapter = setUpViewDataRdd(sparkContext);
         var chapterCourse = setUpChapterDataRdd(sparkContext);
         var titlesData = setUpTitlesDataRdd(sparkContext);
@@ -86,8 +87,7 @@ public class Main {
                         new Tuple2<>(
                                 new Tuple3<>(tuple._1(), tuple._2()._1().get()._2(), tuple._2()._2().get()), 1))
                 .reduceByKey(Integer::sum)
-                .mapToPair(tuple ->
-                {
+                .mapToPair(tuple -> {
                     var score = (double) tuple._2() / tuple._1()._3();
 
                     if (score > 0.9) {
