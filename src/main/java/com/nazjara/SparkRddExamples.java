@@ -3,6 +3,7 @@ package com.nazjara;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -13,6 +14,11 @@ import java.util.List;
 public class SparkRddExamples {
 
     public static void main(String[] args) {
+        sparkRddExamples();
+        sparkSqlExamples();
+    }
+
+    private static void sparkRddExamples() {
         var sparkConfig = new SparkConf()
                 .setAppName("Spark app")
                 .setMaster("local[*]");
@@ -27,11 +33,11 @@ public class SparkRddExamples {
 
             // reduceByKey
             sparkContext.parallelize(
-                    List.of("WARN: log message 1",
-                            "ERROR: log message 2",
-                            "FATAL: log message 3",
-                            "ERROR: log message 4",
-                            "WARN: log message 5"))
+                            List.of("WARN: log message 1",
+                                    "ERROR: log message 2",
+                                    "FATAL: log message 3",
+                                    "ERROR: log message 4",
+                                    "WARN: log message 5"))
                     .mapToPair(value -> new Tuple2<>(value.split(":")[0], 1L))
                     .reduceByKey(Long::sum)
                     .collect()
@@ -135,5 +141,20 @@ public class SparkRddExamples {
                     var columns = commaSeparatedLine.split(",");
                     return new Tuple2<>(Integer.valueOf(columns[0]), Integer.valueOf(columns[1]));
                 });
+    }
+
+    private static void sparkSqlExamples() {
+        try (var sparkSession = SparkSession.builder()
+                .appName("Spark app")
+                .master("local[*]")
+                .getOrCreate()) {
+
+            var dataset = sparkSession.read()
+                    .option("header", true)
+                    .csv("src/main/resources/exams/students.csv");
+
+            dataset.show();
+            System.out.println(dataset.count());
+        }
     }
 }
