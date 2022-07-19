@@ -3,6 +3,8 @@ package com.nazjara;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
@@ -10,6 +12,8 @@ import scala.Tuple3;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.spark.sql.functions.col;
 
 public class SparkRddExamples {
 
@@ -155,6 +159,24 @@ public class SparkRddExamples {
 
             dataset.show();
             System.out.println(dataset.count());
+
+            System.out.println(dataset.first().getAs("subject").toString());
+            System.out.println(Integer.parseInt(dataset.first().getAs("year")));
+
+            //filter 1
+            dataset
+                    .filter("subject = 'Modern Art' and year >= 2007")
+                    .show();
+
+            //filter 2
+            dataset
+                    .filter((FilterFunction<Row>) row -> row.getAs("subject").toString().equals("Modern Art") &&
+                            Integer.parseInt(row.getAs("year")) >= 2007)
+                    .show();
+
+            //filter 3
+            dataset.filter(col("subject").equalTo("Modern Art")
+                    .and(col("year").geq(2007)));
         }
     }
 }
