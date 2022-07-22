@@ -19,7 +19,7 @@ import scala.Tuple3;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.*;
 
 public class SparkExamples {
 
@@ -205,6 +205,7 @@ public class SparkExamples {
             }));
 
             sqlExamples(dataset, sparkSession);
+            dataFrameExamples(dataset);
 
             //working with files
             dataset = sparkSession.read()
@@ -212,6 +213,7 @@ public class SparkExamples {
                     .csv("src/main/resources/biglog.txt");
 
             sqlExamples(dataset, sparkSession);
+            dataFrameExamples(dataset);
         }
     }
 
@@ -220,7 +222,7 @@ public class SparkExamples {
         dataset.createOrReplaceTempView("logging_view");
         dataset = sparkSession
                 .sql("select level, " +
-                        "collect_list(datetime) from logging_view " +
+                        "collect_list(datetime) as datetime_list from logging_view " +
                         "group by level " +
                         "order by level");
         dataset.show(Integer.MAX_VALUE);
@@ -235,7 +237,31 @@ public class SparkExamples {
 
         dataset.createOrReplaceTempView("final_view");
         sparkSession
-                .sql("select sum(total) from final_view")
+                .sql("select sum(total) as total from final_view")
+                .show(Integer.MAX_VALUE);
+    }
+
+    private static void dataFrameExamples(Dataset<Row> dataset)
+    {
+        var dataset2 = dataset
+                .groupBy(col("level"))
+                .agg(collect_list("datetime").as("datetime_list"))
+                .orderBy(col("level"));
+        dataset2.show(Integer.MAX_VALUE);
+
+        var dataset3 = dataset
+                .select(col("level"),
+                        date_format(col("datetime"), "MMMM").as("month"),
+                        date_format(col("datetime"), "M").as("monthnum").cast(DataTypes.IntegerType))
+                .groupBy(col("level"), col("month"), col("monthnum"))
+                .count()
+                .withColumnRenamed("count", "total")
+                .orderBy(col("monthnum"), col("level"))
+                .drop(col("monthnum"));
+        dataset3.show(Integer.MAX_VALUE);
+
+        dataset3
+                .select(sum(col("total")).as("total"))
                 .show(Integer.MAX_VALUE);
     }
 }
