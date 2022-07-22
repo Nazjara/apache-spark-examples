@@ -4,8 +4,14 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -15,7 +21,7 @@ import java.util.List;
 
 import static org.apache.spark.sql.functions.col;
 
-public class SparkRddExamples {
+public class SparkExamples {
 
     public static void main(String[] args) {
         sparkRddExamples();
@@ -176,7 +182,60 @@ public class SparkRddExamples {
 
             //filter 3
             dataset.filter(col("subject").equalTo("Modern Art")
-                    .and(col("year").geq(2007)));
+                            .and(col("year").geq(2007)))
+                    .show();
+
+            //filter 4
+            dataset.createOrReplaceTempView("students_view");
+            sparkSession
+                    .sql("select score, year from students_view where subject = 'Modern Art' and year >= 2007")
+                    .show();
+
+            //working with in-memory data
+            var inMemoryData = List.of(
+                    RowFactory.create("WARN", "2022-07-20 12:00:00"),
+                    RowFactory.create("FATAL", "2022-07-19 13:00:00"),
+                    RowFactory.create("WARN", "2022-07-18 14:00:00"),
+                    RowFactory.create("INFO", "2022-08-17 15:00:00"),
+                    RowFactory.create("WARN", "2022-08-16 16:00:00"));
+
+            dataset = sparkSession.createDataFrame(inMemoryData, new StructType(new StructField[]{
+                    new StructField("level", DataTypes.StringType, false, Metadata.empty()),
+                    new StructField("datetime", DataTypes.StringType, false, Metadata.empty()),
+            }));
+
+            sqlExamples(dataset, sparkSession);
+
+            //working with files
+            dataset = sparkSession.read()
+                    .option("header", true)
+                    .csv("src/main/resources/biglog.txt");
+
+            sqlExamples(dataset, sparkSession);
         }
+    }
+
+    private static void sqlExamples(Dataset<Row> dataset, SparkSession sparkSession)
+    {
+        dataset.createOrReplaceTempView("logging_view");
+        dataset = sparkSession
+                .sql("select level, " +
+                        "collect_list(datetime) from logging_view " +
+                        "group by level " +
+                        "order by level");
+        dataset.show(Integer.MAX_VALUE);
+
+        dataset = sparkSession
+                .sql("select level, " +
+                        "date_format(datetime, 'MMMM') as month, " +
+                        "count(1) as total from logging_view " +
+                        "group by level, month " +
+                        "order by cast(first(date_format(datetime, 'M')) as int), level");
+        dataset.show(Integer.MAX_VALUE);
+
+        dataset.createOrReplaceTempView("final_view");
+        sparkSession
+                .sql("select sum(total) from final_view")
+                .show(Integer.MAX_VALUE);
     }
 }

@@ -50,7 +50,7 @@
 				<configuration>
 					<archive>
 						<manifest>
-							<mainClass>com.nazjara.SparkRddExamples</mainClass>
+							<mainClass>com.nazjara.SparkExamples</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
