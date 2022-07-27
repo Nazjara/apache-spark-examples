@@ -191,6 +191,14 @@ public class SparkExamples {
                     .sql("select score, year from students_view where subject = 'Modern Art' and year >= 2007")
                     .show();
 
+            //aggregations
+            dataset
+                    .groupBy(col("subject"))
+                    .agg(max(col("score")).as("max_score"),
+                         min(col("score")).as("min_score"))
+                    .show();
+
+
             //working with in-memory data
             var inMemoryData = List.of(
                     RowFactory.create("WARN", "2022-07-20 12:00:00"),
