@@ -252,15 +252,26 @@ public class SparkExamples {
         var dataset3 = dataset
                 .select(col("level"),
                         date_format(col("datetime"), "MMMM").as("month"),
-                        date_format(col("datetime"), "M").as("monthnum").cast(DataTypes.IntegerType))
+                        date_format(col("datetime"), "M").as("monthnum").cast(DataTypes.IntegerType));
+
+        var dataset4 = dataset3
                 .groupBy(col("level"), col("month"), col("monthnum"))
                 .count()
                 .withColumnRenamed("count", "total")
                 .orderBy(col("monthnum"), col("level"))
                 .drop(col("monthnum"));
-        dataset3.show(Integer.MAX_VALUE);
+        dataset4.show(Integer.MAX_VALUE);
 
         dataset3
+                .groupBy(col("level"))
+                .pivot(col("month"), List.of("January", "February", "March", "April", "May" , "June",
+                        "July", "August", "September", "October", "November", "December"))
+                .count()
+                .na()
+                .fill(0)
+                .show(Integer.MAX_VALUE);
+
+        dataset4
                 .select(sum(col("total")).as("total"))
                 .show(Integer.MAX_VALUE);
     }
