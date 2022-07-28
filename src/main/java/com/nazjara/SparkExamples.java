@@ -198,6 +198,14 @@ public class SparkExamples {
                          min(col("score")).as("min_score"))
                     .show();
 
+            //pivot
+            dataset
+                    .groupBy(col("subject"))
+                    .pivot(col("year"))
+                    .agg(round(avg(col("score")), 2).as("average_score"),
+                            round(stddev(col("score")), 2).as("standard_deviation_score"))
+                    .show();
+
 
             //working with in-memory data
             var inMemoryData = List.of(
