@@ -160,6 +160,8 @@ public class SparkExamples {
                 .master("local[*]")
                 .getOrCreate()) {
 
+            sparkSession.conf().set("spark.sql.shuffle.partitions", "12");
+
             var dataset = sparkSession.read()
                     .option("header", true)
                     .csv("src/main/resources/exams/students.csv");
