@@ -16,6 +16,7 @@ import org.sparkproject.guava.collect.Iterables;
 import scala.Tuple2;
 import scala.Tuple3;
 
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.List;
 
@@ -206,6 +207,22 @@ public class SparkExamples {
                             round(stddev(col("score")), 2).as("standard_deviation_score"))
                     .show();
 
+            //user-defined functions
+            sparkSession.udf().register("hasPassed", (String grade, String subject) -> {
+
+                if (subject.equals("Biology")){
+                    return grade.startsWith("A");
+                }
+
+                return grade.startsWith("A") || grade.startsWith("B") || grade.startsWith("C");
+            }, DataTypes.BooleanType);
+
+            dataset
+                    .withColumn("pass",
+                            callUDF("hasPassed",
+                                    col("grade"),
+                                    col("subject")))
+                    .show();
 
             //working with in-memory data
             var inMemoryData = List.of(
@@ -243,12 +260,18 @@ public class SparkExamples {
                         "order by level");
         dataset.show(Integer.MAX_VALUE);
 
+        sparkSession.udf().register("monthNum", (String month) -> {
+            var inputDate = new SimpleDateFormat("MMMM").parse(month);
+            return Integer.parseInt(new SimpleDateFormat("M").format(inputDate));
+        }, DataTypes.IntegerType);
+
         dataset = sparkSession
                 .sql("select level, " +
                         "date_format(datetime, 'MMMM') as month, " +
                         "count(1) as total from logging_view " +
                         "group by level, month " +
-                        "order by cast(first(date_format(datetime, 'M')) as int), level");
+//                        "order by cast(first(date_format(datetime, 'M')) as int), level"); //cast instead of using UDF
+                        "order by monthNum(month), level");
         dataset.show(Integer.MAX_VALUE);
 
         dataset.createOrReplaceTempView("final_view");
