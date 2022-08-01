@@ -209,6 +209,9 @@ public class SparkExamples {
                             round(stddev(col("score")), 2).as("standard_deviation_score"))
                     .show();
 
+            //show execution plan
+            dataset.explain();
+
             //user-defined functions
             sparkSession.udf().register("hasPassed", (String grade, String subject) -> {
 
