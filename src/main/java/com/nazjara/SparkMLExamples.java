@@ -6,7 +6,13 @@ import org.apache.spark.ml.regression.LinearRegression;
 import org.apache.spark.ml.regression.LinearRegressionModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.ml.tuning.TrainValidationSplit;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Arrays;
+
+import static org.apache.spark.sql.functions.col;
 
 public class SparkMLExamples {
 
@@ -15,6 +21,8 @@ public class SparkMLExamples {
                 .appName("Spark ML app")
                 .master("local[*]")
                 .getOrCreate()) {
+
+            sparkSession.sparkContext().setLogLevel("WARN");
 
             gymRepsAnalysis(sparkSession);
             housePriceAnalysis(sparkSession);
@@ -58,9 +66,14 @@ public class SparkMLExamples {
         dataset.printSchema();
         dataset.show();
 
+        calculateFeatureCorrelation(dataset);
+
+        dataset = dataset.withColumn("sqft_above_percentage",
+                col("sqft_above").divide(col("sqft_living")));
+
         var vectorAssembler = new VectorAssembler();
         vectorAssembler
-                .setInputCols(new String[]{"bedrooms", "bathrooms", "sqft_living", "sqft_lot", "floors", "grade"})
+                .setInputCols(new String[]{"bedrooms", "bathrooms", "sqft_living", "sqft_above_percentage", "floors"})
                 .setOutputCol("features");
 
         var transformedDataset = vectorAssembler.transform(dataset)
@@ -101,4 +114,16 @@ public class SparkMLExamples {
         System.out.println(model.coefficients() + " " + model.intercept());
         System.out.println(model.getRegParam() + " " + model.getElasticNetParam());
     }
+
+    private static void calculateFeatureCorrelation(Dataset<Row> dataset)
+    {
+        var testDataset = dataset.drop("id", "date", "waterfront", "view", "condition", "grade",
+                "yr_renovated", "zipcode", "lat", "long", "sqft_lot", "sqft_lot15", "yr_built", "sqft_living15");
+
+        Arrays.stream(testDataset.columns()).forEach(column ->
+                Arrays.stream(testDataset.columns()).forEach(column2 ->
+                        System.out.println("The correlation between " + column + " and " + column2 + " is " +
+                                dataset.stat().corr(column, column2))));
+    }
+
 }
