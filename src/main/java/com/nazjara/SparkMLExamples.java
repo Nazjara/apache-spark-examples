@@ -1,6 +1,8 @@
 package com.nazjara;
 
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
+import org.apache.spark.ml.feature.OneHotEncoder;
+import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.regression.LinearRegression;
 import org.apache.spark.ml.regression.LinearRegressionModel;
@@ -27,7 +29,6 @@ public class SparkMLExamples {
             gymRepsAnalysis(sparkSession);
             housePriceAnalysis(sparkSession);
         }
-
     }
 
     private static void gymRepsAnalysis(SparkSession sparkSession) {
@@ -39,9 +40,21 @@ public class SparkMLExamples {
         dataset.printSchema();
         dataset.show();
 
+        var genderIndexer = new StringIndexer();
+        genderIndexer.setInputCol("Gender");
+        genderIndexer.setOutputCol("GenderIndex");
+        dataset = genderIndexer.fit(dataset).transform(dataset);
+        dataset.show();
+
+        var genderEncoder = new OneHotEncoder();
+        genderEncoder.setInputCol("GenderIndex");
+        genderEncoder.setOutputCol("GenderVector");
+        dataset = genderEncoder.fit(dataset).transform(dataset);
+        dataset.show();
+
         var vectorAssembler = new VectorAssembler();
         vectorAssembler
-                .setInputCols(new String[]{"Age", "Height", "Weight"})
+                .setInputCols(new String[]{"Age", "Height", "Weight", "GenderVector"})
                 .setOutputCol("features");
 
         var transformedDataset = vectorAssembler.transform(dataset)
@@ -66,6 +79,18 @@ public class SparkMLExamples {
         dataset.printSchema();
         dataset.show();
 
+        var indexer = new StringIndexer();
+        indexer.setInputCols(new String[] {"condition", "grade", "zipcode"});
+        indexer.setOutputCols(new String[] {"conditionIndex", "gradeIndex", "zipcodeIndex"});
+        dataset = indexer.fit(dataset).transform(dataset);
+        dataset.show();
+
+        var encoder = new OneHotEncoder();
+        encoder.setInputCols(new String[] {"conditionIndex", "gradeIndex", "zipcodeIndex"});
+        encoder.setOutputCols(new String[] {"conditionVector", "gradeVector", "zipcodeVector"});
+        dataset = encoder.fit(dataset).transform(dataset);
+        dataset.show();
+
         calculateFeatureCorrelation(dataset);
 
         dataset = dataset.withColumn("sqft_above_percentage",
@@ -73,7 +98,8 @@ public class SparkMLExamples {
 
         var vectorAssembler = new VectorAssembler();
         vectorAssembler
-                .setInputCols(new String[]{"bedrooms", "bathrooms", "sqft_living", "sqft_above_percentage", "floors"})
+                .setInputCols(new String[]{"bedrooms", "bathrooms", "sqft_living", "sqft_above_percentage", "floors",
+                        "conditionVector", "gradeVector", "zipcodeVector", "waterfront"})
                 .setOutputCol("features");
 
         var transformedDataset = vectorAssembler.transform(dataset)
@@ -118,7 +144,8 @@ public class SparkMLExamples {
     private static void calculateFeatureCorrelation(Dataset<Row> dataset)
     {
         var testDataset = dataset.drop("id", "date", "waterfront", "view", "condition", "grade",
-                "yr_renovated", "zipcode", "lat", "long", "sqft_lot", "sqft_lot15", "yr_built", "sqft_living15");
+                "yr_renovated", "zipcode", "lat", "long", "sqft_lot", "sqft_lot15", "yr_built", "sqft_living15",
+                "conditionIndex", "gradeIndex", "zipcodeIndex", "conditionVector", "gradeVector", "zipcodeVector");
 
         Arrays.stream(testDataset.columns()).forEach(column ->
                 Arrays.stream(testDataset.columns()).forEach(column2 ->
