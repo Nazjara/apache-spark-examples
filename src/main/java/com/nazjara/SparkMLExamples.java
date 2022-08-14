@@ -1,5 +1,7 @@
 package com.nazjara;
 
+import org.apache.spark.ml.Pipeline;
+import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
 import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
@@ -8,6 +10,7 @@ import org.apache.spark.ml.regression.LinearRegression;
 import org.apache.spark.ml.regression.LinearRegressionModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.ml.tuning.TrainValidationSplit;
+import org.apache.spark.ml.tuning.TrainValidationSplitModel;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -79,38 +82,29 @@ public class SparkMLExamples {
         dataset.printSchema();
         dataset.show();
 
+        calculateFeatureCorrelation(dataset);
+
+        dataset = dataset.withColumn("sqft_above_percentage",
+                col("sqft_above").divide(col("sqft_living")))
+                .withColumnRenamed("price", "label");
+
+        var combinedData = dataset.randomSplit(new double[] {0.8, 0.2});
+        var trainingAndTestData = combinedData[0];
+        var holdOutData = combinedData[1];
+
         var indexer = new StringIndexer();
         indexer.setInputCols(new String[] {"condition", "grade", "zipcode"});
         indexer.setOutputCols(new String[] {"conditionIndex", "gradeIndex", "zipcodeIndex"});
-        dataset = indexer.fit(dataset).transform(dataset);
-        dataset.show();
 
         var encoder = new OneHotEncoder();
         encoder.setInputCols(new String[] {"conditionIndex", "gradeIndex", "zipcodeIndex"});
         encoder.setOutputCols(new String[] {"conditionVector", "gradeVector", "zipcodeVector"});
-        dataset = encoder.fit(dataset).transform(dataset);
-        dataset.show();
-
-        calculateFeatureCorrelation(dataset);
-
-        dataset = dataset.withColumn("sqft_above_percentage",
-                col("sqft_above").divide(col("sqft_living")));
 
         var vectorAssembler = new VectorAssembler();
         vectorAssembler
                 .setInputCols(new String[]{"bedrooms", "bathrooms", "sqft_living", "sqft_above_percentage", "floors",
                         "conditionVector", "gradeVector", "zipcodeVector", "waterfront"})
                 .setOutputCol("features");
-
-        var transformedDataset = vectorAssembler.transform(dataset)
-                .select("price", "features")
-                .withColumnRenamed("price", "label");
-
-        transformedDataset.show();
-
-        var combinedData = transformedDataset.randomSplit(new double[] {0.8, 0.2});
-        var trainingAndTestData = combinedData[0];
-        var holdOutData = combinedData[1];
 
         var linearRegression = new LinearRegression();
         var paramGridBuilder = new ParamGridBuilder();
@@ -125,20 +119,24 @@ public class SparkMLExamples {
                 .setEstimatorParamMaps(paramMap)
                 .setTrainRatio(0.8);
 
-        var model = (LinearRegressionModel) trainValidationSplit
-                .fit(trainingAndTestData)
-                .bestModel();
+        var pipeline = new Pipeline();
+        pipeline.setStages(new PipelineStage[] {indexer, encoder, vectorAssembler, trainValidationSplit});
+        var pipelineModel = pipeline.fit(trainingAndTestData);
+        var model = (TrainValidationSplitModel) pipelineModel.stages()[3];
+        var linearRegressionModel = (LinearRegressionModel) model.bestModel();
 
-        System.out.println("The training data r2 value (closer to 1 is better) is " + model.summary().r2() +
-                " and the RMSE (smaller is better) is " + model.summary().rootMeanSquaredError());
+        var holdOutResults = pipelineModel.transform(holdOutData);
+        holdOutResults.show();
+        holdOutResults = holdOutResults.drop("prediction");
 
-        model.transform(holdOutData).show();
+        System.out.println("The training data r2 value (closer to 1 is better) is " + linearRegressionModel.summary().r2() +
+                " and the RMSE (smaller is better) is " + linearRegressionModel.summary().rootMeanSquaredError());
 
-        System.out.println("The testing data r2 value (closer to 1 is better) is " + model.evaluate(holdOutData).r2() +
-                " and the RMSE (smaller is better) is " + model.evaluate(holdOutData).rootMeanSquaredError());
+        System.out.println("The testing data r2 value (closer to 1 is better) is " + linearRegressionModel.evaluate(holdOutResults).r2() +
+                " and the RMSE (smaller is better) is " + linearRegressionModel.evaluate(holdOutResults).rootMeanSquaredError());
 
-        System.out.println(model.coefficients() + " " + model.intercept());
-        System.out.println(model.getRegParam() + " " + model.getElasticNetParam());
+        System.out.println(linearRegressionModel.coefficients() + " " + linearRegressionModel.intercept());
+        System.out.println(linearRegressionModel.getRegParam() + " " + linearRegressionModel.getElasticNetParam());
     }
 
     private static void calculateFeatureCorrelation(Dataset<Row> dataset)
