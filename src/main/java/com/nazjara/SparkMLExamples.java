@@ -2,6 +2,8 @@ package com.nazjara;
 
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
+import org.apache.spark.ml.classification.LogisticRegression;
+import org.apache.spark.ml.classification.LogisticRegressionModel;
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
 import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
@@ -31,8 +33,8 @@ public class SparkMLExamples {
 
             sparkSession.sparkContext().setLogLevel("WARN");
 
-//            gymRepsAnalysis(sparkSession);
-//            housePriceAnalysis(sparkSession);
+            gymRepsAnalysis(sparkSession);
+            housePriceAnalysis(sparkSession);
             subscriptionManagement(sparkSession);
         }
     }
@@ -164,10 +166,13 @@ public class SparkMLExamples {
                         "src/main/resources/ml/part-r-00003-d55d9fed-7427-4d23-aa42-495275510f78.csv");
 
         dataset = dataset.filter("is_cancelled = false");
+
         dataset = dataset.withColumn("firstSub", getNullSubstitutionFunction("firstSub"))
                 .withColumn("all_time_views", getNullSubstitutionFunction("all_time_views"))
                 .withColumn("last_month_views", getNullSubstitutionFunction("last_month_views"))
-                .withColumn("next_month_views", getNullSubstitutionFunction("next_month_views"))
+                // 1 - customers watched no videos, 0 - customers watched some videos
+                .withColumn("next_month_views", when(col("next_month_views")
+                        .$greater(0), 0).otherwise(1))
                 .withColumnRenamed("next_month_views", "label");
 
         var combinedData = dataset.randomSplit(new double[] {0.9, 0.1});
@@ -188,15 +193,15 @@ public class SparkMLExamples {
                         "firstSub", "age", "all_time_views", "last_month_views"})
                 .setOutputCol("features");
 
-        var linearRegression = new LinearRegression();
+        var logisticRegression = new LogisticRegression();
         var paramGridBuilder = new ParamGridBuilder();
         var paramMap = paramGridBuilder
-                .addGrid(linearRegression.regParam(), new double[] {0.01, 0.1, 0.3, 0.5, 0.7, 1})
-                .addGrid(linearRegression.elasticNetParam(), new double[] {0, 0.5, 1})
+                .addGrid(logisticRegression.regParam(), new double[] {0.01, 0.1, 0.3, 0.5, 0.7, 1})
+                .addGrid(logisticRegression.elasticNetParam(), new double[] {0, 0.5, 1})
                 .build();
 
         var trainValidationSplit = new TrainValidationSplit()
-                .setEstimator(linearRegression)
+                .setEstimator(logisticRegression)
                 .setEvaluator(new RegressionEvaluator().setMetricName("r2"))
                 .setEstimatorParamMaps(paramMap)
                 .setTrainRatio(0.9);
@@ -205,24 +210,32 @@ public class SparkMLExamples {
         pipeline.setStages(new PipelineStage[] {indexer, encoder, vectorAssembler, trainValidationSplit});
         var pipelineModel = pipeline.fit(trainingAndTestData);
         var model = (TrainValidationSplitModel) pipelineModel.stages()[3];
-        var linearRegressionModel = (LinearRegressionModel) model.bestModel();
+        var logisticRegressionModel = (LogisticRegressionModel) model.bestModel();
 
         var holdOutResults = pipelineModel.transform(holdOutData);
-        holdOutResults.show();
-        holdOutResults = holdOutResults.drop("prediction");
+        holdOutResults.groupBy("label", "prediction").count().show();
 
-        System.out.println("The training data r2 value (closer to 1 is better) is " + linearRegressionModel.summary().r2() +
-                " and the RMSE (smaller is better) is " + linearRegressionModel.summary().rootMeanSquaredError());
+        holdOutResults = holdOutResults.drop("prediction")
+                .drop("rawPrediction")
+                .drop("probability");
 
-        System.out.println("The testing data r2 value (closer to 1 is better) is " + linearRegressionModel.evaluate(holdOutResults).r2() +
-                " and the RMSE (smaller is better) is " + linearRegressionModel.evaluate(holdOutResults).rootMeanSquaredError());
+        System.out.println("The training data accuracy score (closer to 1 is better) is " +
+                logisticRegressionModel.summary().accuracy());
+        System.out.println(logisticRegressionModel.coefficients() + " " + logisticRegressionModel.intercept());
+        System.out.println(logisticRegressionModel.getRegParam() + " " + logisticRegressionModel.getElasticNetParam());
 
-        System.out.println(linearRegressionModel.coefficients() + " " + linearRegressionModel.intercept());
-        System.out.println(linearRegressionModel.getRegParam() + " " + linearRegressionModel.getElasticNetParam());
+        var summary = logisticRegressionModel.evaluate(holdOutResults);
+
+        System.out.println("The testing data accuracy score (closer to 1 is better) is " + summary.accuracy());
+
+        var truePositives = summary.truePositiveRateByLabel()[1];
+        var falsePositives = summary.falsePositiveRateByLabel()[0];
+
+        System.out.println("For the holdout data, the likelihood of the positive to be correct is " +
+                (truePositives / (truePositives + falsePositives)));
     }
 
     private static Column getNullSubstitutionFunction(String columnName) {
         return when(col(columnName).isNull(), 0).otherwise(col(columnName));
     }
-
 }
