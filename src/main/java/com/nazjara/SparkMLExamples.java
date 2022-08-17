@@ -2,9 +2,13 @@ package com.nazjara;
 
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
+import org.apache.spark.ml.classification.DecisionTreeClassifier;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.LogisticRegressionModel;
+import org.apache.spark.ml.classification.RandomForestClassifier;
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
+import org.apache.spark.ml.feature.IndexToString;
 import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.VectorAssembler;
@@ -17,11 +21,12 @@ import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.types.DataTypes;
 
 import java.util.Arrays;
 
-import static org.apache.spark.sql.functions.col;
-import static org.apache.spark.sql.functions.when;
+import static org.apache.spark.sql.functions.*;
 
 public class SparkMLExamples {
 
@@ -36,6 +41,7 @@ public class SparkMLExamples {
             gymRepsAnalysis(sparkSession);
             housePriceAnalysis(sparkSession);
             subscriptionManagement(sparkSession);
+            freeTrialsManagement(sparkSession);
         }
     }
 
@@ -238,4 +244,90 @@ public class SparkMLExamples {
     private static Column getNullSubstitutionFunction(String columnName) {
         return when(col(columnName).isNull(), 0).otherwise(col(columnName));
     }
+
+    private static void freeTrialsManagement(SparkSession sparkSession) {
+        sparkSession.udf().register("countryGrouping", countryGrouping, DataTypes.StringType);
+
+        var dataset = sparkSession.read()
+                .option("header", true)
+                .option("inferSchema", true)
+                .csv("src/main/resources/ml/freeTrials.csv");
+
+        dataset = dataset
+                .withColumn("country", callUDF("countryGrouping", col("country")))
+                .withColumn("label", when(col("payments_made").geq(1), lit(1)).otherwise(lit(0)));
+
+        dataset = new StringIndexer()
+                .setInputCols(new String[] {"country"})
+                .setOutputCols(new String[] {"countryIndex"})
+                .fit(dataset)
+                .transform(dataset);
+
+        new IndexToString()
+                .setInputCol("countryIndex")
+                .setOutputCol("value")
+                .transform(dataset.select("countryIndex").distinct())
+                .show();
+
+        dataset = new VectorAssembler()
+                .setInputCols(new String[]{"countryIndex", "rebill_period", "chapter_access_count", "seconds_watched"})
+                .setOutputCol("features")
+                .transform(dataset)
+                .select("label", "features");
+
+        var combinedData = dataset.randomSplit(new double[] {0.8, 0.2});
+        var trainingAndTestData = combinedData[0];
+        var holdOutData = combinedData[1];
+
+        var decisionTreeClassifier = new DecisionTreeClassifier();
+        decisionTreeClassifier.setMaxDepth(3);
+
+        var model = new DecisionTreeClassifier()
+                .setMaxDepth(3)
+                .fit(trainingAndTestData);
+
+        dataset = model.transform(holdOutData);
+        dataset.show();
+
+        System.out.println(model.toDebugString());
+
+        System.out.println("Model 1 accuracy is " + new MulticlassClassificationEvaluator()
+                .setMetricName("accuracy")
+                .evaluate(dataset));
+
+        var randomForestClassifier = new RandomForestClassifier();
+        randomForestClassifier.setMaxDepth(3);
+
+        var model2 = new RandomForestClassifier()
+                .setMaxDepth(3)
+                .fit(trainingAndTestData);
+
+        dataset = model2.transform(holdOutData);
+        dataset.show();
+
+        System.out.println(model2.toDebugString());
+
+        System.out.println("Model 2 accuracy is " + new MulticlassClassificationEvaluator()
+                .setMetricName("accuracy")
+                .evaluate(dataset));
+    }
+
+    private static final UDF1<String,String> countryGrouping = country -> {
+        var topCountries =  Arrays.asList("GB", "US", "UA", "UNKNOWN");
+        var europeanCountries =  Arrays.asList("BE", "BG", "CZ", "DK", "DE", "EE", "IE", "EL", "ES", "FR",
+                "HR", "IT", "CY", "LV", "LT", "LU", "HU", "MT", "NL", "AT", "PL", "PT", "RO", "SI", "SK", "FI", "SE",
+                "CH", "IS", "NO", "LI", "EU");
+
+        if (topCountries.contains(country)) {
+            return country;
+        }
+
+        if (europeanCountries.contains(country)) {
+            return "EUROPE";
+        }
+
+        else {
+            return "OTHER";
+        }
+    };
 }
