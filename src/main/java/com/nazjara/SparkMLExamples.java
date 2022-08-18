@@ -6,6 +6,8 @@ import org.apache.spark.ml.classification.DecisionTreeClassifier;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.LogisticRegressionModel;
 import org.apache.spark.ml.classification.RandomForestClassifier;
+import org.apache.spark.ml.clustering.KMeans;
+import org.apache.spark.ml.evaluation.ClusteringEvaluator;
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
 import org.apache.spark.ml.feature.IndexToString;
@@ -42,6 +44,7 @@ public class SparkMLExamples {
             housePriceAnalysis(sparkSession);
             subscriptionManagement(sparkSession);
             freeTrialsManagement(sparkSession);
+            gymRepsAnalysis2(sparkSession);
         }
     }
 
@@ -330,4 +333,50 @@ public class SparkMLExamples {
             return "OTHER";
         }
     };
+
+    private static void gymRepsAnalysis2(SparkSession sparkSession) {
+        var dataset = sparkSession.read()
+                .option("header", true)
+                .option("inferSchema", true)
+                .csv("src/main/resources/ml/GymCompetition.csv");
+
+        dataset.printSchema();
+        dataset.show();
+
+        var genderIndexer = new StringIndexer();
+        genderIndexer.setInputCol("Gender");
+        genderIndexer.setOutputCol("GenderIndex");
+        dataset = genderIndexer.fit(dataset).transform(dataset);
+        dataset.show();
+
+        var genderEncoder = new OneHotEncoder();
+        genderEncoder.setInputCol("GenderIndex");
+        genderEncoder.setOutputCol("GenderVector");
+        dataset = genderEncoder.fit(dataset).transform(dataset);
+        dataset.show();
+
+        var vectorAssembler = new VectorAssembler();
+        dataset = vectorAssembler.setInputCols(new String[] {"GenderVector", "Age", "Height", "Weight", "NoOfReps"})
+                .setOutputCol("features")
+                .transform(dataset)
+                .select("features");
+        dataset.show();
+
+        for (int noOfClusters = 2; noOfClusters < 9; noOfClusters++) {
+            var model = new KMeans()
+                    .setK(noOfClusters)
+                    .fit(dataset);
+            var dataset2 = model.transform(dataset);
+            dataset2.show();
+
+            Arrays.stream(model.clusterCenters())
+                    .forEach(System.out::println);
+
+            dataset2.groupBy("prediction").count().show();
+
+            System.out.println("Number of clusters is "+ noOfClusters);
+            System.out.println("SSE value is " + model.summary().trainingCost());
+            System.out.println("Silhouette with squared euclidean distance is " + new ClusteringEvaluator().evaluate(dataset2));
+        }
+    }
 }
