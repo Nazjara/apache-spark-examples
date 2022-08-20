@@ -14,6 +14,7 @@ import org.apache.spark.ml.feature.IndexToString;
 import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.ml.recommendation.ALS;
 import org.apache.spark.ml.regression.LinearRegression;
 import org.apache.spark.ml.regression.LinearRegressionModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
@@ -45,6 +46,7 @@ public class SparkMLExamples {
             subscriptionManagement(sparkSession);
             freeTrialsManagement(sparkSession);
             gymRepsAnalysis2(sparkSession);
+            courseRecommendations(sparkSession);
         }
     }
 
@@ -378,5 +380,37 @@ public class SparkMLExamples {
             System.out.println("SSE value is " + model.summary().trainingCost());
             System.out.println("Silhouette with squared euclidean distance is " + new ClusteringEvaluator().evaluate(dataset2));
         }
+    }
+
+    private static void courseRecommendations(SparkSession sparkSession) {
+        var dataset = sparkSession.read()
+                .option("header", true)
+                .option("inferSchema", true)
+                .csv("src/main/resources/ml/courseViews.csv");
+
+        dataset.printSchema();
+
+        dataset = dataset
+                .withColumn("proportionWatched", col("proportionWatched")
+                .multiply(100));
+//                .groupBy("userId")
+//                .pivot("courseId")
+//                .sum("proportionWatched");
+
+        var model = new ALS()
+                .setMaxIter(10)
+                .setRegParam(0.1)
+                .setUserCol("userId")
+                .setItemCol("courseId")
+                .setRatingCol("proportionWatched")
+                .fit(dataset)
+                .setColdStartStrategy("drop");
+
+        var finalDataset = dataset;
+        model.recommendForAllUsers(5).takeAsList(5).forEach(row -> {
+            System.out.println("User id: " + row.getAs(0) + "; recommendation: " + row.getAs(1).toString());
+            System.out.println("This user has already watched: ");
+            finalDataset.filter("userId = " + row.getAs(0)).show();
+        });
     }
 }
