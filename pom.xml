@@ -51,6 +51,11 @@
             <artifactId>spark-streaming-kafka-0-10_2.13</artifactId>
             <version>${apache.kafka.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql-kafka-0-10_2.13</artifactId>
+            <version>${apache.kafka.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -64,17 +69,6 @@
                     <target>11</target>
                 </configuration>
             </plugin>
-<!--            <plugin>-->
-<!--                <artifactId>maven-jar-plugin</artifactId>-->
-<!--                <version>3.2.2</version>-->
-<!--                <configuration>-->
-<!--                    <archive>-->
-<!--                        <manifest>-->
-<!--                            <mainClass>com.nazjara.SparkExamples</mainClass>-->
-<!--                        </manifest>-->
-<!--                    </archive>-->
-<!--                </configuration>-->
-<!--            </plugin>-->
         </plugins>
     </build>
 </project>

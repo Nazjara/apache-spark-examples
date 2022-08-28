@@ -1,4 +1,4 @@
-package com.nazjara;
+package com.nazjara.general;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -26,7 +26,7 @@ public class SparkExamples {
 
     public static void main(String[] args) {
         sparkRddExamples();
-        sparkSqlExamples();
+        sparkSqlAndDataFrameExamples();
     }
 
     private static void sparkRddExamples() {
@@ -154,7 +154,7 @@ public class SparkExamples {
                 });
     }
 
-    private static void sparkSqlExamples() {
+    private static void sparkSqlAndDataFrameExamples() {
         try (var sparkSession = SparkSession.builder()
                 .appName("Spark app")
                 .master("local[*]")
@@ -215,7 +215,7 @@ public class SparkExamples {
             //user-defined functions
             sparkSession.udf().register("hasPassed", (String grade, String subject) -> {
 
-                if (subject.equals("Biology")){
+                if (subject.equals("Biology")) {
                     return grade.startsWith("A");
                 }
 
